@@ -1,0 +1,1 @@
+# nginxcrd-custom-resource
