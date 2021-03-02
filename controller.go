@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/golang/glog"
@@ -208,6 +209,7 @@ func (c *Controller) syncHandler(key string) error {
 		return nil
 	}
 
+	reloadNginx := false
 	// Get the Nginxconf resource with this namespace/name
 	nginxconf, err := c.nginxconfsLister.Nginxconves(namespace).Get(name)
 	if err != nil {
@@ -226,12 +228,12 @@ func (c *Controller) syncHandler(key string) error {
 				return err2
 			}
 
-			return nil
+			reloadNginx = true
+		} else {
+			runtime.HandleError(fmt.Errorf("failed to list nginxconf by: %s/%s", namespace, name))
+
+			return err
 		}
-
-		runtime.HandleError(fmt.Errorf("failed to list nginxconf by: %s/%s", namespace, name))
-
-		return err
 	}
 
 	glog.Infof("Try to process nginxconf: %#v ...", nginxconf)
@@ -258,6 +260,7 @@ func (c *Controller) syncHandler(key string) error {
 		}
 
 		f.Sync()
+		reloadNginx = true
 	} else {
 		content, err := ioutil.ReadFile(siteconf)
 		if err != nil {
@@ -271,6 +274,16 @@ func (c *Controller) syncHandler(key string) error {
 				glog.Errorf("Failed to write file: %s, err: %s", siteconf, err.Error())
 				return err
 			}
+			reloadNginx = true
+		}
+	}
+
+	if reloadNginx {
+		cmd := exec.Command(nginxhome + "/sbin/nginx", "-s", "reload")
+		_, err := cmd.CombinedOutput()
+		if err != nil {
+			glog.Errorf("Failed to reload nginx, err:%s", err.Error())
+			return err
 		}
 	}
 
