@@ -29,19 +29,19 @@ import (
 const controllerAgentName = "nginxconf-controller"
 
 const (
-	// SuccessSynced is used as part of the Event 'reason' when a Network is synced
+	// SuccessSynced is used as part of the Event 'reason' when a Nginxconf is synced
 	SuccessSynced = "Synced"
 
-	// MessageResourceSynced is the message used for an Event fired when a Network
+	// MessageResourceSynced is the message used for an Event fired when a Nginxconf
 	// is synced successfully
 	MessageResourceSynced = "Nginxconf synced successfully"
 )
 
-// Controller is the controller implementation for Network resources
+// Controller is the controller implementation for Nginxconf resources
 type Controller struct {
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
-	// networkclientset is a clientset for our own API group
+	// nginxconfclientset is a clientset for our own API group
 	nginxconfclientset clientset.Interface
 
 	nginxconfsLister listers.NginxconfLister
@@ -59,7 +59,7 @@ type Controller struct {
 	nginxhome string
 }
 
-// NewController returns a new network controller
+// NewController returns a new nginxconf controller
 func NewController(
 	kubeclientset kubernetes.Interface,
 	nginxconfclientset clientset.Interface,
@@ -87,15 +87,15 @@ func NewController(
 	}
 
 	glog.Info("Setting up event handlers")
-	// Set up an event handler for when Network resources change
+	// Set up an event handler for when Nginxconf resources change
 	nginxconfInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueNginxconf,
 		UpdateFunc: func(old, new interface{}) {
 			oldNginxconf := old.(*nginxcrdv1.Nginxconf)
 			newNginxconf := new.(*nginxcrdv1.Nginxconf)
 			if oldNginxconf.ResourceVersion == newNginxconf.ResourceVersion {
-				// Periodic resync will send update events for all known Networks.
-				// Two different versions of the same Network will always have different RVs.
+				// Periodic resync will send update events for all known Nginxconves.
+				// Two different versions of the same Nginxconf will always have different RVs.
 				return
 			}
 			controller.enqueueNginxconf(new)
@@ -124,7 +124,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	}
 
 	glog.Info("Starting workers")
-	// Launch two workers to process Network resources
+	// Launch two workers to process Nginxconf resources
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
@@ -178,7 +178,7 @@ func (c *Controller) processNextWorkItem() bool {
 			return nil
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
-		// Network resource to be synced.
+		// Nginxconf resource to be synced.
 		if err := c.syncHandler(key); err != nil {
 			return fmt.Errorf("error syncing '%s': %s", key, err.Error())
 		}
@@ -198,7 +198,7 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 // syncHandler compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the Network resource
+// converge the two. It then updates the Status block of the Nginxconf resource
 // with the current status of the resource.
 func (c *Controller) syncHandler(key string) error {
 	// Convert the namespace/name string into a distinct namespace and name
@@ -211,15 +211,15 @@ func (c *Controller) syncHandler(key string) error {
 	// Get the Nginxconf resource with this namespace/name
 	nginxconf, err := c.nginxconfsLister.Nginxconves(namespace).Get(name)
 	if err != nil {
-		// The Network resource may no longer exist, in which case we stop
+		// The Nginxconf resource may no longer exist, in which case we stop
 		// processing.
 		if errors.IsNotFound(err) {
-			glog.Warningf("Nginxconf: %s/%s does not exist in local cache, will delete it from Neutron ...",
+			glog.Warningf("Nginxconf: %s/%s does not exist in local cache, will delete it from nginx ...",
 				namespace, name)
 
 			glog.Infof("Deleting nginxconf: %s/%s ...", namespace, name)
 
-			siteconf := nginxhome + "/conf/conf.d/" + nginxconf.Name
+			siteconf := nginxhome + "/conf/conf.d/" + name
 			err2 := os.Remove(siteconf)
 			if err2 != nil {
 				glog.Errorf("Failed to delete file: %s", siteconf)
@@ -267,9 +267,10 @@ func (c *Controller) syncHandler(key string) error {
 
 		text := string(content)
 		if text != nginxconf.Spec.Conf {
-			err := ioutil.WriteFile(siteconf, []byte("nginxconf.Spec.Conf"), os.ModePerm)
-			glog.Errorf("Failed to write file: %s, err: %s", siteconf, err.Error())
-			return err
+			if ioutil.WriteFile(siteconf, []byte(nginxconf.Spec.Conf), os.ModePerm) != nil {
+				glog.Errorf("Failed to write file: %s, err: %s", siteconf, err.Error())
+				return err
+			}
 		}
 	}
 
@@ -277,9 +278,9 @@ func (c *Controller) syncHandler(key string) error {
 	return nil
 }
 
-// enqueueNginxconf takes a Network resource and converts it into a namespace/name
+// enqueueNginxconf takes a Nginxconf resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than Network.
+// passed resources of any type other than Nginxconf.
 func (c *Controller) enqueueNginxconf(obj interface{}) {
 	var key string
 	var err error
@@ -290,9 +291,9 @@ func (c *Controller) enqueueNginxconf(obj interface{}) {
 	c.workqueue.AddRateLimited(key)
 }
 
-// enqueueNginxconfForDelete takes a deleted Network resource and converts it into a namespace/name
+// enqueueNginxconfForDelete takes a deleted Nginxconf resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than Network.
+// passed resources of any type other than Nginxconf.
 func (c *Controller) enqueueNginxconfForDelete(obj interface{}) {
 	var key string
 	var err error
